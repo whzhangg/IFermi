@@ -9,10 +9,9 @@ from ifermi.kpoints import kpoints_from_bandstructure
 from ifermi.QE_adaptor import QE_get_band_structure
 
 # load VASP calculation outputs
-#vr = Vasprun("vasprun.xml")
-#bs = vr.get_band_structure()
 
-QE_get_band_structure("MgB2/wannier/nscf.out")
+bs = QE_get_band_structure("MgB2/nscf.nspin2.out")
+
 
 # interpolate the energies onto a dense k-point mesh
 interpolator = FourierInterpolator(bs)

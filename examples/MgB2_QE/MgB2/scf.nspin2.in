@@ -1,15 +1,13 @@
 &control
- calculation = 'vc-relax'
+ calculation = 'scf'
  prefix = 'MgB2'
  outdir = './out'
  pseudo_dir = '/home/whzhang/work/packages/pseudo/ONCV_PBEsol'
  restart_mode = 'from_scratch'
- verbosity = 'low'
+ verbosity = 'high'
  tstress = .true.
  tprnfor = .true.
- disk_io = 'none'
- etot_conv_thr = 1e-4
- forc_conv_thr = 1e-8
+ disk_io = 'low'
 /
 
 &system
@@ -22,19 +20,14 @@
  smearing = 'mp'
  degauss = 0.001 ! Ry
  ! nbnd = 
+ nspin = 2 
+ starting_magnetization(2) = 0
+ starting_magnetization(1) = 0
 /
 
 &electrons
  conv_thr =    3.0e-13
  mixing_beta = 0.4
-/
-
-&ions
- ion_dynamics = 'bfgs'
-/
-
-&cell
- press_conv_thr = 0.1
 /
 
 ATOMIC_SPECIES

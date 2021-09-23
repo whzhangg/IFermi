@@ -1,18 +1,26 @@
-# this is supposed to be an adaptor that read an nscf.out calculation and return an band structure class
-
-
 import re
 import numpy as np
-from ase.data import atomic_numbers
 from pymatgen.electronic_structure.bandstructure import BandStructure
 from pymatgen.core.lattice import Lattice
 from pymatgen.core.structure import Structure
 from pymatgen.electronic_structure.core import Spin
 
+# Wenhao Zhang, 2021/09/23 wenhao997@outlook.com
+# examples/MgB2_QE contains test output for spin non-polarized and spin polarized calculation, which reproduce the 
+# result as in MgB2
+
 Bohr2A = 0.529177210 # A
 
 class nscfOut:
+    """
+    a class written to praser nscf output of Quantum espresso pw.x
 
+    requirement:
+        verbosity = 'high'   (output energies for each k point)
+
+    parsing assumes a fixed output format of PWSCF v. 6.4
+
+    """
     def __init__(self, filename: str):
         self.output = filename
         
@@ -21,7 +29,6 @@ class nscfOut:
 
         # crystal structure
         self.positions = None
-        self.types = None
         self.symbols = None
         self.lattice = None
 
@@ -46,17 +53,21 @@ class nscfOut:
         natom = 0
         positions = []
         nk = 0
-        energy_up = []
-        energy_down = []
         symbols = []
         k_frac = []
         efermi = 0
+
+        energy = {"spinup" : [],
+                  "spindown" : []
+                  }
+
+        which = "spinup"  # remember if we are reading spin up or spin down
         
         with open(self.output,'r') as f:
             aline=f.readline()
 
             while aline:
-
+                # read information by checking the flags
                 if "lattice parameter (alat)  =" in aline:
                     data = aline.split('=')[1]
                     data = data.split()
@@ -101,58 +112,64 @@ class nscfOut:
                 if "the Fermi energy is" in aline:
                     efermi = float(re.findall(r'-?\d+\.\d+', aline)[0])
 
-                elif re.search('k\s+=\s*-?\d+\.\d+\s*-?\d+\.\d+\s*-?\d+\.\d+\s',aline) != None:
+                if "------ SPIN UP ------------" in aline:
+                    which = "spinup"
+
+                if "------ SPIN DOWN ----------" in aline:
+                    which = "spindown"
+
+                if re.search('k\s+=\s*-?\d+\.\d+\s*-?\d+\.\d+\s*-?\d+\.\d+\s',aline) != None:
                     kstr=re.findall(r'-?\d+\.\d+',aline)
 
                     f.readline()
 
-                    energy = []
-                    while len(energy) < nbnd:
+                    lenergy = [] # local energy for each k point
+                    while len(lenergy) < nbnd:
                         aline = f.readline()
                         data = np.array(aline.split(), dtype = float)
                         for d in data:
-                            energy.append(d)
-                    if len(energy) > nbnd:
+                            lenergy.append(d)
+
+                    if len(lenergy) > nbnd:
                         raise "length of energy > nbnd"
-                    #self.energy.append(energy)
-                    energy_up.append(energy)
+
+                    energy[which].append(lenergy)
                 
                 aline = f.readline()
 
         self.efermi = efermi
         self.lattice = lattice
-        self.types = [ atomic_numbers[s] for s in symbols ]
         self.symbols = symbols 
         self.positions = np.array(positions)
-
         self.reciprocal = recip
-
         self.kpoints = k_frac
 
         self.eig = {}
-        energy_spin = [np.array(energy_up).T, np.array(energy_down).T]
-        for i, s in enumerate(Spin):
-            self.eig[s] = energy_spin[i]
+        self.eig[Spin.up] = np.array(energy["spinup"]).T
 
-    def __distance(self,k1,k2):
-        dk = np.array(k1) - np.array(k2)
-        return np.sqrt(dk.dot(dk))
+        if energy["spindown"]:
+            self.spin_polarized = True
+            self.eig[Spin.down] = np.array(energy["spindown"]).T
 
-from collections import defaultdict
 
 def QE_get_band_structure(nscfout: str) -> BandStructure:
-    #
+    """
+    get pymatgen.electronic_structure.bandstructure object from a nscf output
+    
+    args:
+        file name of the nscf calculation
+    """
     result = nscfOut(nscfout)
-    lattice_new = Lattice(result.reciprocal)
 
-    #eigenvals: DefaultDict[Spin, list] = defaultdict(list)
+    lattice_new = Lattice(result.reciprocal)
     structure = Structure(result.lattice, result.symbols, result.positions)
 
-    band = BandStructure(result.kpoints, 
+    return BandStructure(result.kpoints, 
                          result.eig, 
                          lattice_new, 
                          result.efermi, 
                          structure = structure)
-    return band
 
-QE_get_band_structure("MgB2/wannier/nscf.out")
+if __name__ == "__main__":
+    bs = QE_get_band_structure("../examples/MgB2_QE/MgB2/nscf.nspin1.out")
+    print(bs.bands)
